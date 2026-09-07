@@ -1,0 +1,15 @@
+node_modules/
+.env
+*.db
+*.db-shm
+*.db-wal
+backend/uploads/
+backend/.env
+frontend/.env
+secure-cloud-storage/.env
+*.pem
+*.key
+*.crt
+wallet/
+fabric-samples/
+secure-cloud-storage/build/
