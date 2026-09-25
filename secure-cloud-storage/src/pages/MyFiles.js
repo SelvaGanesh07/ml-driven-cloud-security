@@ -10,16 +10,20 @@ const fmt = (b) => {
 };
 
 const fmtDate = (iso) => {
-  try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-  catch { return iso || '—'; }
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch { return iso || '—'; }
 };
 
 function fileIcon(name = '') {
   const ext = name.split('.').pop().toLowerCase();
-  if (ext === 'pdf')                                        return ['bi-file-earmark-pdf-fill',  'fi-pdf'];
-  if (['png','jpg','jpeg','gif','webp'].includes(ext))      return ['bi-file-earmark-image-fill','fi-img'];
-  if (['doc','docx','txt','md'].includes(ext))              return ['bi-file-earmark-text-fill', 'fi-doc'];
-  if (['zip','rar','tar','gz'].includes(ext))               return ['bi-file-earmark-zip-fill',  'fi-zip'];
+  if (ext === 'pdf')                                   return ['bi-file-earmark-pdf-fill',  'fi-pdf'];
+  if (['png','jpg','jpeg','gif','webp'].includes(ext)) return ['bi-file-earmark-image-fill','fi-img'];
+  if (['doc','docx','txt','md'].includes(ext))         return ['bi-file-earmark-text-fill', 'fi-doc'];
+  if (['zip','rar','tar','gz'].includes(ext))          return ['bi-file-earmark-zip-fill',  'fi-zip'];
   return ['bi-file-earmark-fill', 'fi-other'];
 }
 
@@ -32,25 +36,131 @@ function StatusBadge({ s }) {
 const AV_COLORS = ['#0D6EFD','#8b5cf6','#06b6d4','#10b981','#f59e0b','#ef4444'];
 const avStyle = (name = '') => {
   const c = AV_COLORS[(name.charCodeAt(0) || 0) % AV_COLORS.length];
-  return { width: 28, height: 28, borderRadius: 7, background: c, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 };
+  return {
+    width: 28, height: 28, borderRadius: 7, background: c, color: '#fff',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '0.74rem', fontWeight: 700, flexShrink: 0,
+  };
 };
 
-export default function MyFiles() {
-  const [files,   setFiles]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
-  const [search,  setSearch]  = useState('');
-  const [filter,  setFilter]  = useState('All');
-  const [page,    setPage]    = useState(1);
-  const [sortF,   setSortF]   = useState('timestamp');
-  const [sortD,   setSortD]   = useState('desc');
+// ── Verify button + inline result ────────────────────────────────────────────
+// verifyState[id]: 'idle' | 'loading' | 'verified' | 'mismatch' | 'error'
+function VerifyButton({ fileId, verifyState, verifyMsg, onVerify }) {
+  const state = verifyState[fileId] || 'idle';
+  const msg   = verifyMsg[fileId]   || '';
 
+  if (state === 'loading') {
+    return (
+      <button
+        className="btn btn-sm btn-outline-success"
+        style={{ borderRadius: 7, fontSize: '0.77rem', padding: '4px 10px' }}
+        disabled
+      >
+        <span className="spinner-border spinner-border-sm me-1" style={{ width: '0.65rem', height: '0.65rem' }} />
+        Verifying…
+      </button>
+    );
+  }
+
+  if (state === 'verified') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span
+          className="badge-ok d-inline-flex align-items-center gap-1"
+          style={{ fontSize: '0.75rem', padding: '4px 8px', whiteSpace: 'nowrap' }}
+        >
+          <i className="bi bi-patch-check-fill" />
+          Integrity Verified
+        </span>
+        {msg && (
+          <span style={{ fontSize: '0.7rem', color: '#059669', lineHeight: 1.3 }}>
+            {msg}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (state === 'mismatch') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span
+          className="badge-danger d-inline-flex align-items-center gap-1"
+          style={{ fontSize: '0.75rem', padding: '4px 8px', whiteSpace: 'nowrap' }}
+        >
+          <i className="bi bi-x-octagon-fill" />
+          Integrity Mismatch
+        </span>
+        {msg && (
+          <span style={{ fontSize: '0.7rem', color: '#b91c1c', lineHeight: 1.3 }}>
+            {msg}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span
+          className="badge-warn d-inline-flex align-items-center gap-1"
+          style={{ fontSize: '0.75rem', padding: '4px 8px', whiteSpace: 'nowrap' }}
+        >
+          <i className="bi bi-exclamation-triangle-fill" />
+          Verify Failed
+        </span>
+        {msg && (
+          <span style={{ fontSize: '0.7rem', color: '#92400e', lineHeight: 1.3 }}>
+            {msg}
+          </span>
+        )}
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          style={{ borderRadius: 7, fontSize: '0.7rem', padding: '2px 6px', marginTop: 2 }}
+          onClick={() => onVerify(fileId)}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  // idle — default state
+  return (
+    <button
+      className="btn btn-sm btn-outline-success"
+      style={{ borderRadius: 7, fontSize: '0.77rem', padding: '4px 10px' }}
+      onClick={() => onVerify(fileId)}
+    >
+      <i className="bi bi-shield-check me-1" />
+      Verify
+    </button>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export default function MyFiles() {
+  const [files,       setFiles]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
+  const [search,      setSearch]      = useState('');
+  const [filter,      setFilter]      = useState('All');
+  const [page,        setPage]        = useState(1);
+  const [sortF,       setSortF]       = useState('timestamp');
+  const [sortD,       setSortD]       = useState('desc');
+
+  // Per-file verify state – keyed by file._id
+  const [verifyState, setVerifyState] = useState({});
+  const [verifyMsg,   setVerifyMsg]   = useState({});
+
+  // ── Load files ─────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
         const res = await filesAPI.getAllFiles();
         const raw = res.data?.files || res.data || [];
-        // Strip any hash fields (defence-in-depth)
+        // Strip any accidental hash fields — defence-in-depth
         const safe = raw.map(({ hash, sha256, checksum, fileHash, ...rest }) => rest); // eslint-disable-line no-unused-vars
         setFiles(safe);
       } catch {
@@ -61,6 +171,54 @@ export default function MyFiles() {
     })();
   }, []);
 
+  // ── Verify handler ─────────────────────────────────────────────────────────
+  const handleVerify = async (fileId) => {
+    // Reset any previous result for this file
+    setVerifyState(prev => ({ ...prev, [fileId]: 'loading' }));
+    setVerifyMsg(prev =>   ({ ...prev, [fileId]: '' }));
+
+    try {
+      const res = await filesAPI.verifyIntegrity(fileId);
+      const { verified, message, recommendation } = res.data;
+
+      if (verified) {
+        setVerifyState(prev => ({ ...prev, [fileId]: 'verified' }));
+        setVerifyMsg(prev =>   ({ ...prev, [fileId]: 'File has not been modified.' }));
+
+        // Reflect the result in the in-memory status badge immediately
+        setFiles(prev =>
+          prev.map(f => f._id === fileId ? { ...f, status: 'Verified' } : f)
+        );
+      } else {
+        setVerifyState(prev => ({ ...prev, [fileId]: 'mismatch' }));
+        // Show user-friendly text; never show raw hash values
+        setVerifyMsg(prev => ({
+          ...prev,
+          [fileId]: recommendation || 'Possible file tampering detected. Contact your administrator.',
+        }));
+
+        // Reflect the alert status in the Status badge immediately
+        setFiles(prev =>
+          prev.map(f => f._id === fileId ? { ...f, status: 'Alert' } : f)
+        );
+      }
+    } catch (err) {
+      const status = err.response?.status;
+      let msg = 'Verification could not be completed. Please try again.';
+
+      if (status === 401) msg = 'Session expired. Please log in again.';
+      else if (status === 403) msg = 'Access denied. This file does not belong to your account.';
+      else if (status === 404) msg = 'File not found on the server.';
+      else if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED') {
+        msg = 'Cannot reach the backend. Check your connection.';
+      }
+
+      setVerifyState(prev => ({ ...prev, [fileId]: 'error' }));
+      setVerifyMsg(prev =>   ({ ...prev, [fileId]: msg }));
+    }
+  };
+
+  // ── Sort ───────────────────────────────────────────────────────────────────
   const handleSort = (f) => {
     if (sortF === f) setSortD(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortF(f); setSortD('asc'); }
@@ -71,6 +229,7 @@ export default function MyFiles() {
     ? <i className="bi bi-arrow-down-up ms-1 text-muted" style={{ fontSize: '0.68rem' }} />
     : <i className={`bi bi-arrow-${sortD === 'asc' ? 'up' : 'down'} ms-1 text-primary`} style={{ fontSize: '0.68rem' }} />;
 
+  // ── Filter + search + sort ─────────────────────────────────────────────────
   const filtered = useMemo(() => {
     let list = [...files];
     if (filter !== 'All') list = list.filter(f => f.status === filter);
@@ -90,18 +249,24 @@ export default function MyFiles() {
   }, [files, search, filter, sortF, sortD]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const paged      = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
+  // ── Download ───────────────────────────────────────────────────────────────
   const handleDownload = async (f) => {
     try {
       const res = await filesAPI.downloadFile(f._id);
       const url = URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement('a'); a.href = url; a.download = f.fileName; a.click(); URL.revokeObjectURL(url);
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = f.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       alert('Download failed: ' + (err.response?.data?.message || err.message));
     }
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -131,10 +296,12 @@ export default function MyFiles() {
             </div>
             <div className="search-wrap">
               <i className="bi bi-search" />
-              <input type="text" className="form-control search-input"
-                placeholder="Search files, owners…" value={search}
+              <input
+                type="text" className="form-control search-input"
+                placeholder="Search files…" value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                style={{ width: 220 }} />
+                style={{ width: 220 }}
+              />
             </div>
           </div>
         </div>
@@ -189,14 +356,31 @@ export default function MyFiles() {
                           <span style={{ fontSize: '0.84rem' }}>{f.owner || '—'}</span>
                         </div>
                       </td>
-                      <td><span style={{ fontSize: '0.8rem', color: '#64748b' }}><i className="bi bi-calendar3 me-1" />{fmtDate(f.timestamp || f.uploadTime || f.createdAt)}</span></td>
+                      <td>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                          <i className="bi bi-calendar3 me-1" />
+                          {fmtDate(f.timestamp || f.uploadTime || f.createdAt)}
+                        </span>
+                      </td>
                       <td><span style={{ fontSize: '0.8rem', color: '#64748b' }}>{fmt(f.size)}</span></td>
                       <td><StatusBadge s={f.status || 'Pending'} /></td>
                       <td>
-                        <button className="btn btn-sm btn-primary" style={{ borderRadius: 7, fontSize: '0.77rem', padding: '4px 10px' }}
-                          onClick={() => handleDownload(f)}>
-                          <i className="bi bi-download me-1" />Download
-                        </button>
+                        {/* Actions: Verify + Download side by side */}
+                        <div className="d-flex gap-1 align-items-start flex-wrap">
+                          <VerifyButton
+                            fileId={f._id}
+                            verifyState={verifyState}
+                            verifyMsg={verifyMsg}
+                            onVerify={handleVerify}
+                          />
+                          <button
+                            className="btn btn-sm btn-primary"
+                            style={{ borderRadius: 7, fontSize: '0.77rem', padding: '4px 10px' }}
+                            onClick={() => handleDownload(f)}
+                          >
+                            <i className="bi bi-download me-1" />Download
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -217,8 +401,10 @@ export default function MyFiles() {
                 <i className="bi bi-chevron-left" />
               </button>
               {[...Array(totalPages)].map((_, i) => (
-                <button key={i} className={`btn btn-sm ${page === i + 1 ? 'btn-primary' : 'btn-outline-secondary'}`}
-                  style={{ borderRadius: 7, minWidth: 34 }} onClick={() => setPage(i + 1)}>
+                <button key={i}
+                  className={`btn btn-sm ${page === i + 1 ? 'btn-primary' : 'btn-outline-secondary'}`}
+                  style={{ borderRadius: 7, minWidth: 34 }}
+                  onClick={() => setPage(i + 1)}>
                   {i + 1}
                 </button>
               ))}
